@@ -1,0 +1,36 @@
+---
+title: "Projet ISA"
+author: "Rochd"
+date: "19 octobre 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading data
+
+
+```{r}
+df<-read.csv("TrainSample.csv",sep = ";")
+```
+
+## Setting missing values
+```{r}
+
+for (i in 1:ncol(df)){
+    df[,i][df[,i]==""] <- NA
+}
+
+```
+
+## Vizualizing missing values
+```{r}
+
+library(Amelia)
+missmap(df, main = "Données manquantes/Données observées")
+sapply(df,function(x) sum(is.na(x)))
+```
+
+
