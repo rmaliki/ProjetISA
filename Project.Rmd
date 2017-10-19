@@ -13,24 +13,30 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r}
-df<-read.csv("TrainSample.csv",sep = ";")
+df<-read.csv2("TrainSample.csv")
 ```
 
-## Setting missing values
+##Default data structure
+
 ```{r}
-
-for (i in 1:ncol(df)){
-    df[,i][df[,i]==""] <- NA
-}
-
+str(df)
 ```
 
-## Vizualizing missing values
-```{r}
+This dataset contains 3 types Data types : num - int - date 
+***The date data type is considered as factor. 
 
+## Convert Factor To Date
+```{r}
+df$Date_Completion<-as.Date(df$Date_Completion, format = "%d/%m/%Y")
+df$Date_Drilling<-as.Date(df$Date_Drilling, format = "%d/%m/%Y")
+df$Date_Production<-as.Date(df$Date_Production, format = "%d/%m/%Y")
+```
+
+
+## Visualizing missing values
+
+```{r}
 library(Amelia)
 missmap(df, main = "Données manquantes/Données observées")
 sapply(df,function(x) sum(is.na(x)))
 ```
-
-
