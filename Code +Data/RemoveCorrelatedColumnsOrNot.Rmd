@@ -1,0 +1,53 @@
+---
+title: "Remove_Correlated_Columns"
+author: "Andreas"
+date: "October 23, 2017"
+output:
+  html_document: default
+  word_document: default
+fontsize: 13pt
+---
+Input data
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,include=TRUE}
+library(readr)
+library(gtools)
+d<- read_delim("~/Desktop/S3/S5 Project/TrainSample.csv", ";", escape_double = FALSE, col_types = cols(Date_Completion = col_date(format = "%d/%m/%Y"), Date_Production = col_date(format = "%d/%m/%Y")), trim_ws = TRUE)
+```
+make correlation matrix ( omit dates)
+```{r,include=TRUE}
+m=matrix(c(0),45,45)
+for(i in c(2:3,7:45)){
+  for(j in c(2:3,7:45)){
+    z=cor(d[,i],d[,j],use = "pairwise.complete.obs")
+    m[i,j]=z
+  }
+}
+```
+remove the diagnal ones and take absolute
+```{r,include=TRUE}
+m[m==1]=0 
+m=abs(m)
+
+
+```
+order the entries and print out the ones ( with index) higher than treshold
+```{r,include=TRUE}
+tresh=0.98
+for(i in 1:44){
+  for(j in 1:44){
+    if (m[i,j]>tresh){
+      cat(m[i,j],i,j)
+      print("------")
+    }
+  }
+}
+
+
+```
+We can see that the columns 30 and 31 ( "Propant designed"" and "Propant in formation"h ave correlation higher than 0.98.
+They have exactly the same missing values, so does not matter which one to delete.
+
