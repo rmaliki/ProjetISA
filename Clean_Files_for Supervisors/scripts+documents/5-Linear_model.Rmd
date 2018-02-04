@@ -1,0 +1,397 @@
+---
+title: "TOTAL"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This notebook in an implementation of simple linear regression
+
+```{r}
+#Loading data
+trainG1<-read.csv('Train_G1.csv',sep = ';',header = TRUE)
+trainG2<-read.csv('Train_G2.csv',sep = ';',header = TRUE)
+testG1<-read.csv('Test_G1.csv',sep = ';',header = TRUE)
+testG2<-read.csv('Test_G2.csv',sep = ';',header = TRUE)
+trainG1[is.na(trainG1)] <- 0
+trainG2[is.na(trainG2)] <- 0
+
+```
+
+# Model for Oil
+```{r}
+oilPredG1<-trainG1[,-which(names(trainG1) %in% c("GasCum360","API"))] 
+oilModelG1 <- lm(OilCum360 ~ ., oilPredG1)
+#
+oilPredG2<-trainG2[, -which(names(trainG2) %in% c("GasCum360","API"))] 
+oilModelG2 <- lm(OilCum360 ~ ., oilPredG2)
+```
+
+```{r}
+testOilG1 <- predict(oilModelG1, newdata = testG1, interval = 'pre')
+testOilG2 <- predict(oilModelG2, newdata = testG2, interval = 'pre')
+```
+
+# Model for Gas
+```{r}
+gasPredG1<-trainG1[, -which(names(trainG1) %in% c("OilCum360","API"))] 
+gasModelG1 <- lm(GasCum360 ~ ., gasPredG1)
+#
+gasPredG2<-trainG2[, -which(names(trainG2) %in% c("OilCum360","API"))] 
+gasModelG2 <- lm(GasCum360 ~ ., gasPredG2)
+```
+
+```{r}
+testGasG1 <- predict(gasModelG1, newdata = testG1, interval = 'pre')
+testGasG2 <- predict(gasModelG2, newdata = testG2, interval = 'pre')
+```
+
+```{r}
+test_m<-read.csv('test_merged.csv',sep = ',',header = TRUE)
+```
+
+```{r}
+test_m<-test_m[ , !(names(test_m) %in% c('Zone'))]
+G1<-testG1[c('API','Zone')]
+G2<-testG2[c('API','Zone')]
+G<-rbind(G1,G2)
+test_m2<-merge(test_m,G,by = 'API')
+write.table(test_m2, "final_test.csv", sep = ",",
+quote = FALSE, row.names = FALSE)
+```
+
+
+
+## Résultats G1
+```{r}
+resultsG1 <- data.frame(ID = testG1$API,
+CUM360_INF = testOilG1[,2],
+CUM360_SUP = testOilG1[,3],
+GAS360_INF = testGasG1[,2],
+GAS360_SUP = testGasG1[,3])
+```
+
+```{r}
+resultsG2 <- data.frame(ID = testG2$API,
+CUM360_INF = testOilG2[,2],
+CUM360_SUP = testOilG2[,3],
+GAS360_INF = testGasG2[,2],
+GAS360_SUP = testGasG2[,3])
+```
+
+# Writing result
+```{r}
+results<-rbind(resultsG1,resultsG2)
+write.table(results, "submit.csv", sep = ";",
+quote = FALSE, row.names = FALSE)
+```
+ 
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(predict(oilModelG1),trainG1$OilCum360,xlab="predicted",ylab="actual")
+plot(predict(oilModelG2),trainG2$OilCum360,xlab="predicted",ylab="actual")
+#
+plot(predict(gasModelG1),trainG1$GasCum360,xlab="predicted",ylab="actual")
+plot(predict(gasModelG2),trainG2$GasCum360,xlab="predicted",ylab="actual")
+
+```
+
+
+```{r}
+#RMSE for the simple model linéaire :
+library(ModelMetrics)
+mO1<-rmse(predicted = (oilModelG1$fitted.values), actual = trainG1$OilCum360)
+print(mO1)
+mO2<-rmse(predicted = (oilModelG2$fitted.values), actual = trainG2$OilCum360)
+print(mO2)
+mG1<-rmse(predicted = (gasModelG1$fitted.values), actual = trainG1$GasCum360)
+print(mG1)
+mG2<-rmse(predicted = (gasModelG2$fitted.values), actual = trainG2$GasCum360)
+print(mG2)
+
+```
+
+
+
+
+#Implement PCR : PRINCIPAL COMPONENT REGRESSION (Feature selection for the linear regression) : 
+
+```{r}
+require(pls)
+set.seed(100)
+oilModel1 <- pcr(OilCum360 ~ ., data=oilPredG1, scale = TRUE, validation = "CV")
+oilModel2 <- pcr(OilCum360 ~ ., data=oilPredG2, scale = TRUE, validation = "CV")
+gasModel1 <- pcr(GasCum360 ~ ., data=gasPredG1, scale = TRUE, validation = "CV")
+gasModel2 <- pcr(GasCum360 ~ ., data=gasPredG2, scale = TRUE, validation = "CV")
+```
+
+```{r}
+summary(oilModel1)
+summary(oilModel2)
+summary(gasModel1)
+summary(gasModel2)
+```
+
+```{r}
+#Plot the ROOT MEAN SQUARE ERROR
+par(mfrow=c(2,2))
+validationplot(oilModel1)
+validationplot(oilModel2)
+validationplot(gasModel1)
+validationplot(gasModel2)
+```
+
+```{r}
+#Plot the ROOT MEAN SQUARE ERROR
+par(mfrow=c(2,2))
+validationplot(oilModel1,val.type = "MSEP")
+validationplot(oilModel2,val.type = "MSEP")
+validationplot(gasModel1,val.type = "MSEP")
+validationplot(gasModel2,val.type = "MSEP")
+```
+
+```{r}
+#Plot the ROOT MEAN SQUARE ERROR
+par(mfrow=c(2,2))
+validationplot(oilModel1,val.type = "R2")
+validationplot(oilModel2,val.type = "R2")
+validationplot(gasModel1,val.type = "R2")
+validationplot(gasModel2,val.type = "R2")
+```
+
+### What we want is a low cross validation error with a lower number of components than the number of variables in your dataset
+- for oilModel1 : 9cps (0.55,72%) -  30cps (0.49,99%) 
+- for oilModel2 : 13cps (0.87,99%)
+- for gasModel1 : 21cps (0.52,94%) -  29cps (0.524,98%) 
+- for gasModel2 : 13cps (0.685,99%)
+
+```{r}
+set.seed(100)
+oilModel1 <- pcr(OilCum360 ~ ., data=oilPredG1, scale = TRUE, validation = "CV")
+oilModel2 <- pcr(OilCum360 ~ ., data=oilPredG2, scale = TRUE, validation = "CV")
+gasModel1 <- pcr(GasCum360 ~ ., data=gasPredG1, scale = TRUE, validation = "CV")
+gasModel2 <- pcr(GasCum360 ~ ., data=gasPredG2, scale = TRUE, validation = "CV")
+```
+
+```{r}
+testOil1 <- predict(oilModel1, newdata = testG1,ncomp = 30 , interval = 'prediction')
+testOil2 <- predict(oilModel2, newdata = testG2,ncomp = 13 , interval = 'prediction')
+testGas1 <- predict(gasModel1, newdata = testG1,ncomp = 29, interval = 'prediction')
+testGas2 <- predict(gasModel2, newdata = testG2,ncomp = 13, interval = 'prediction')
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(oilModel1, ncomp=30, line=TRUE)
+plot(oilModel2, ncomp=13, line=TRUE)
+plot(gasModel1, ncomp=29, line=TRUE)
+plot(gasModel2, ncomp=13, line=TRUE)
+```
+
+```{r}
+#RMSE 
+library(ModelMetrics)
+mO_1<-rmse(predicted = (oilModel1$fitted.values[,,30]), actual = trainG1$OilCum360)
+print(mO_1)
+mO_2<-rmse(predicted = (oilModel2$fitted.values[,,13]), actual = trainG2$OilCum360)
+print(mO_2)
+mG_1<-rmse(predicted = (gasModel1$fitted.values[,,29]), actual = trainG1$GasCum360)
+print(mG_1)
+mG_2<-rmse(predicted = (gasModel2$fitted.values[,,13]), actual = trainG2$GasCum360)
+print(mG_2)
+```
+[1] 0.4155829
+[1] 0.6798284
+[1] 0.4414425
+[1] 0.519629
+## Linear model By zone : 
+```{r}
+partitions<-read.csv("partitionned_data2.csv",sep="," ,header = TRUE)[,c(3,49)]
+```
+
+```{r}
+trainG1<-(merge(x=trainG1, y=partitions, by.x = "API", by.y = "API"))
+trainG2<-(merge(x=trainG2, y=partitions, by.x = "API", by.y = "API"))
+```
+
+```{r}
+###SPLITTING TO GROUPS
+#group 0:(low gas): Zones 1,2,4, part of zone 0
+#group 1:(intermediate) part of zone 0
+#group 2:(low oil): Zones 5,6,7,8,9 part of zone 0
+trainG1_1<-trainG1[trainG1$group==1,-which(names(trainG1) %in% c("group"))]
+trainG1_2<-trainG1[trainG1$group==2,-which(names(trainG1) %in% c("group"))]
+trainG1_3<-trainG1[trainG1$group==3,-which(names(trainG1) %in% c("group"))]
+#
+trainG2_1<-trainG2[trainG2$group==1,-which(names(trainG2) %in% c("group"))]
+trainG2_2<-trainG2[trainG2$group==2,-which(names(trainG2) %in% c("group"))]
+trainG2_3<-trainG2[trainG2$group==3,-which(names(trainG2) %in% c("group"))]
+
+```
+
+```{r}
+nrow(trainG1_1)
+nrow(trainG1_2)
+nrow(trainG1_3)
+nrow(trainG2_1)
+nrow(trainG2_2)
+nrow(trainG2_3)
+
+```
+
+
+# Model for Oil
+```{r}
+#one model by partition (G1)
+oilPredG1_1<-trainG1_1[,-which(names(trainG1_1) %in% c("GasCum360","API"))] 
+oilModelG1_1 <- lm(OilCum360 ~ ., oilPredG1_1)
+#
+oilPredG1_2<-trainG1_2[,-which(names(trainG1_2) %in% c("GasCum360","API"))] 
+oilModelG1_2 <- lm(OilCum360 ~ ., oilPredG1_2)
+#
+oilPredG1_3<-trainG1_3[,-which(names(trainG1_3) %in% c("GasCum360","API"))] 
+oilModelG1_3 <- lm(OilCum360 ~ ., oilPredG1_3)
+
+#one model by partition (G2)
+oilPredG2_1<-trainG2_1[, -which(names(trainG2_1) %in% c("GasCum360","API"))] 
+oilModelG2_1 <- lm(OilCum360 ~ ., oilPredG2_1)
+#
+oilPredG2_2<-trainG2_2[, -which(names(trainG2_2) %in% c("GasCum360","API"))] 
+oilModelG2_2 <- lm(OilCum360 ~ ., oilPredG2_2)
+#
+oilPredG2_3<-trainG2_3[, -which(names(trainG2_3) %in% c("GasCum360","API"))] 
+oilModelG2_3 <- lm(OilCum360 ~ ., oilPredG2_3)
+```
+
+
+
+# Model for Gas
+```{r}
+#one model by partition (G1)
+gasPredG1_1<-trainG1_1[,-which(names(trainG1_1) %in% c("OilCum360","API"))] 
+gasModelG1_1 <- lm(GasCum360 ~ ., gasPredG1_1)
+#
+gasPredG1_2<-trainG1_2[,-which(names(trainG1_2) %in% c("OilCum360","API"))] 
+gasModelG1_2 <- lm(GasCum360 ~ ., gasPredG1_2)
+#
+gasPredG1_3<-trainG1_3[,-which(names(trainG1_3) %in% c("OilCum360","API"))] 
+gasModelG1_3 <- lm(GasCum360 ~ ., gasPredG1_3)
+
+#one model by partition (G2)
+gasPredG2_1<-trainG2_1[, -which(names(trainG2_1) %in% c("OilCum360","API"))] 
+gasModelG2_1 <- lm(GasCum360 ~ ., gasPredG2_1)
+#
+gasPredG2_2<-trainG2_2[, -which(names(trainG2_2) %in% c("OilCum360","API"))] 
+gasModelG2_2 <- lm(GasCum360 ~ ., gasPredG2_2)
+#
+gasPredG2_3<-trainG2_3[, -which(names(trainG2_3) %in% c("OilCum360","API"))] 
+gasModelG2_3 <- lm(GasCum360 ~ ., gasPredG2_3)
+
+```
+
+
+### Regression for group1_OIL
+```{r}
+par(mfrow=c(2,2))
+plot(predict(oilModelG1_1),trainG1_1$OilCum360,xlab="predicted",ylab="actual",line=TRUE)
+#
+plot(predict(oilModelG1_2),trainG1_2$OilCum360,xlab="predicted",ylab="actual",line=TRUE)
+#
+plot(predict(oilModelG1_3),trainG1_3$OilCum360,xlab="predicted",ylab="actual",line=TRUE)
+```
+
+```{r}
+#Errors
+mO1_1<-rmse(predicted = predict(oilModelG1_1), actual = trainG1_1$OilCum360)
+print(mO1_1)
+mO1_2<-rmse(predicted = predict(oilModelG1_2), actual = trainG1_2$OilCum360)
+print(mO1_2)
+mO1_3<-rmse(predicted = predict(oilModelG1_3), actual = trainG1_3$OilCum360)
+print(mO1_3)
+```
+
+### Regression for group2_OIL
+```{r}
+par(mfrow=c(2,2))
+plot(predict(oilModelG2_1),trainG2_1$OilCum360,xlab="predicted",ylab="actual",line=TRUE)
+#
+plot(predict(oilModelG2_2),trainG2_2$OilCum360,xlab="predicted",ylab="actual",line=TRUE)
+#
+plot(predict(oilModelG2_3),trainG2_3$OilCum360,xlab="predicted",ylab="actual",line=TRUE)
+```
+
+```{r}
+#Errors
+mO2_1<-rmse(predicted = predict(oilModelG2_1), actual = trainG2_1$OilCum360)
+print(mO2_1)
+mO2_2<-rmse(predicted = predict(oilModelG2_2), actual = trainG2_2$OilCum360)
+print(mO2_2)
+mO2_3<-rmse(predicted = predict(oilModelG2_3), actual = trainG2_3$OilCum360)
+print(mO2_3)
+```
+
+### Regression for group1_GAS
+```{r}
+par(mfrow=c(2,2))
+plot(predict(gasModelG1_1),trainG1_1$GasCum360,xlab="predicted",ylab="actual",line=TRUE)
+#
+plot(predict(gasModelG1_2),trainG1_2$GasCum360,xlab="predicted",ylab="actual",line=TRUE)
+#
+plot(predict(gasModelG1_3),trainG1_3$GasCum360,xlab="predicted",ylab="actual",line=TRUE)
+```
+
+```{r}
+#Errors
+mG1_1<-rmse(predicted = predict(gasModelG1_1), actual = trainG1_1$GasCum360)
+print(mG1_1)
+mG1_2<-rmse(predicted = predict(gasModelG1_2), actual = trainG1_2$GasCum360)
+print(mG1_2)
+mG1_3<-rmse(predicted = predict(gasModelG1_3), actual = trainG1_3$GasCum360)
+print(mG1_3)
+```
+### Regression for group2_GAS
+```{r}
+par(mfrow=c(2,2))
+plot(predict(gasModelG2_1),trainG2_1$GasCum360,xlab="predicted",ylab="actual")
+#
+plot(predict(gasModelG2_2),trainG2_2$GasCum360,xlab="predicted",ylab="actual")
+#
+plot(predict(gasModelG2_3),trainG2_3$GasCum360,xlab="predicted",ylab="actual")
+```
+
+```{r}
+#eRRORS
+mG2_1<-rmse(predicted = predict(gasModelG2_1), actual = trainG2_1$GasCum360)
+print(mG2_1)
+mG2_2<-rmse(predicted = predict(gasModelG2_2), actual = trainG2_2$GasCum360)
+print(mG2_2)
+mG2_3<-rmse(predicted = predict(gasModelG2_3), actual = trainG2_3$GasCum360)
+print(mG2_3)
+```
+
+
+
+```{r}
+#Table Resuming Results
+dd<-data.frame(taille=c(nrow(trainG1_1),nrow(trainG1_2),nrow(trainG1_3),nrow(trainG1_1),nrow(trainG1_2),nrow(trainG1_3),nrow(trainG2_1),nrow(trainG2_2),nrow(trainG2_3),nrow(trainG2_1),nrow(trainG2_2),nrow(trainG2_3)),rmse=c(mO1_1,mO1_2,mO1_3,mG1_1,mG1_2,mG1_3,mO2_1,mO2_2,mO2_3,mG2_1,mG2_2,mG2_3),row.names=c("G1_oil_group1","G1_oil_group2","G1_oil_group3","G1_gas_group1","G1_gas_group2","G1_gas_group3","G2_oil_group1","G2_oil_group2","G2_oil_group3","G2_gas_group1","G2_gas_group2","G2_gas_group3"))
+dd
+```
+
+####Errors(means for groups):
+[1] 0.2273601
+[1] 0.1509307
+[1] 0.2327817
+[1] 0.1787228
+
+####Errors in the simple general model
+[1] 0.4155829
+[1] 0.6798284
+[1] 0.4414425
+[1] 0.519629
+
+
+
